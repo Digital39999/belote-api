@@ -69,10 +69,8 @@ game.startGame();
     <script src="https://unpkg.com/belote@latest/dist/browser/belote-api.min.js"></script>
     
     <script>
-        // Available as global BeloteAPI
-        const { Belote, GamePhase } = BeloteAPI;
-        
-        const game = new Belote({
+        // Available as global BeloteAPI        
+        const game = new BeloteAPI({
             endValue: 501,
             moveTime: 30,
             botDelayMs: 1000
