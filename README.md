@@ -69,8 +69,10 @@ game.startGame();
     <script src="https://unpkg.com/belote@latest/dist/browser/belote-api.min.js"></script>
     
     <script>
-        // Available as global BeloteAPI        
-        const game = new BeloteAPI({
+        // Available as global BeloteAPI
+        const { Belote } = BeloteAPI;
+
+        const game = new Belote({
             endValue: 501,
             moveTime: 30,
             botDelayMs: 1000
@@ -91,7 +93,7 @@ game.startGame();
 </head>
 <body>
     <script type="module">
-        import { Belote, GamePhase } from 'https://unpkg.com/belote@latest/dist/esm/index.js';
+        import { Belote, GamePhase } from 'https://unpkg.com/belote@latest/dist/browser/belote-api.esm.js';
         
         const game = new Belote({
             endValue: 501,

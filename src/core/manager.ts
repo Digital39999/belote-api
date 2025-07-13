@@ -40,6 +40,9 @@ export class Belote extends EventEmitter {
 
 	public playerJoin(playerName?: string, teamId?: number, playerId?: string): Player {
 		if (this.gameState.players.length >= 4) throw new Error('Cannot add more than 4 players.');
+		else if (playerId && this.gameState.players.some((p) => p.id === playerId)) throw new Error(`Player with ID ${playerId} already exists.`);
+		else if (teamId && teamId !== 1 && teamId !== 2) throw new Error(`Invalid team ID: ${teamId}. Must be 1 or 2.`);
+		else if (teamId && this.gameState.players.filter((p) => p.teamId === teamId).length >= 2) throw new Error(`Team ${teamId} is already full.`);
 
 		const newPlayer: Player = {
 			id: playerId || `player-${this.gameState.players.length + 1}`,
@@ -58,6 +61,10 @@ export class Belote extends EventEmitter {
 	}
 
 	public addBot(botName?: string, teamId?: number): Player {
+		if (this.gameState.players.length >= 4) throw new Error('Cannot add more than 4 players.');
+		else if (teamId && teamId !== 1 && teamId !== 2) throw new Error(`Invalid team ID: ${teamId}. Must be 1 or 2.`);
+		else if (teamId && this.gameState.players.filter((p) => p.teamId === teamId).length >= 2) throw new Error(`Team ${teamId} is already full.`);
+
 		const newBot: Player = {
 			id: `bot-${this.gameState.players.length + 1}`,
 			name: botName || `Bot ${this.gameState.players.length + 1}`,
@@ -106,14 +113,11 @@ export class Belote extends EventEmitter {
 	public setPlayerReady(playerId: string, isReady: boolean): void {
 		const player = this.gameState.players.find((p) => p.id === playerId);
 		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
-
-		// Don't allow changing ready state for bots
-		if (player.isBot) return;
+		else if (player.isBot) return;
 
 		this.updatePlayer(playerId, { isReady });
 		this.emit('playerReadyChanged', playerId, isReady);
 
-		// Check if all players are ready to start
 		if (this.gameState.players.length === 4 && this.gameState.players.every((p) => p.isReady)) {
 			this.emit('allPlayersReady');
 		}
@@ -145,7 +149,6 @@ export class Belote extends EventEmitter {
 		}, duration * 1000);
 	}
 
-	// NEW METHOD: Handle bot actions with delay
 	private handleBotAction(action: () => void): void {
 		setTimeout(action, this.options.botDelayMs);
 	}
@@ -154,7 +157,6 @@ export class Belote extends EventEmitter {
 		if (this.gameState.players.length < 4) throw new Error('Need 4 players to start');
 		if (this.gameState.players.some((p) => !p.isReady)) throw new Error('All players must be ready');
 
-		// Reset game state
 		this.gameState.round = 0;
 		this.gameState.isGameOver = false;
 		this.gameState.team1.score = [];
@@ -225,7 +227,6 @@ export class Belote extends EventEmitter {
 
 		const currentPlayer = this.getCurrentPlayer();
 		if (currentPlayer.isBot) {
-			// MODIFIED: Handle bot bidding
 			this.handleBotAction(() => {
 				const botDecision = this.botAI.decideBid(currentPlayer, currentPlayer.isDealer);
 				this.bid(currentPlayer.id, botDecision);
@@ -275,7 +276,6 @@ export class Belote extends EventEmitter {
 
 			const currentPlayer = this.getCurrentPlayer();
 			if (currentPlayer.isBot) {
-				// MODIFIED: Handle bot bidding
 				this.handleBotAction(() => {
 					const botDecision = this.botAI.decideBid(currentPlayer, currentPlayer.isDealer);
 					this.bid(currentPlayer.id, botDecision);
@@ -309,7 +309,6 @@ export class Belote extends EventEmitter {
 		this.gameState.gamePhase = GamePhase.Calling;
 		this.emit('callingPhaseStarted');
 
-		// MODIFIED: Handle bot calling
 		for (const player of this.gameState.players) {
 			if (player.isBot) {
 				this.handleBotAction(() => {
@@ -341,7 +340,6 @@ export class Belote extends EventEmitter {
 		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
 		if (this.gameState.gamePhase !== GamePhase.Calling) throw new Error('Not in calling phase.');
 
-		// Check if player has already called
 		const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === playerId);
 		if (hasAlreadyCalled) throw new Error('Player has already made a call.');
 
@@ -388,22 +386,15 @@ export class Belote extends EventEmitter {
 			return player?.teamId === 2;
 		});
 
-		// Get highest call for each team
 		const team1HighestCall = getHighestCall(team1Calls);
 		const team2HighestCall = getHighestCall(team2Calls);
 
-		// Determine winner
 		let winningCall: CallingsCall | null = null;
 
-		if (!team1HighestCall && !team2HighestCall) {
-			// No calls made
-			winningCall = null;
-		} else if (!team1HighestCall) {
-			winningCall = team2HighestCall;
-		} else if (!team2HighestCall) {
-			winningCall = team1HighestCall;
-		} else {
-			// Both teams have calls - compare them
+		if (!team1HighestCall && !team2HighestCall) winningCall = null;
+		else if (!team1HighestCall) winningCall = team2HighestCall;
+		else if (!team2HighestCall) winningCall = team1HighestCall;
+		else {
 			const comparison = compareCallStrength(team1HighestCall, team2HighestCall);
 			if (comparison > 0) winningCall = team1HighestCall;
 			else if (comparison < 0) winningCall = team2HighestCall;
@@ -424,7 +415,7 @@ export class Belote extends EventEmitter {
 
 	private startPlayingPhase(): void {
 		this.gameState.gamePhase = GamePhase.Playing;
-		this.gameState.currentPlayerIndex = 0; // Start with first player
+		this.gameState.currentPlayerIndex = 0;
 		this.gameState.currentTrick = {
 			cardsPlayed: [],
 		};
@@ -434,7 +425,6 @@ export class Belote extends EventEmitter {
 
 		const currentPlayer = this.getCurrentPlayer();
 		if (currentPlayer.isBot) {
-			// MODIFIED: Handle bot card playing
 			this.handleBotAction(() => {
 				if (this.gameState.adut) {
 					const allPlayerCards = [...currentPlayer.cards, ...currentPlayer.talon];
@@ -443,12 +433,12 @@ export class Belote extends EventEmitter {
 						this.gameState.currentTrick?.cardsPlayed || [],
 						this.gameState.adut,
 					);
+
 					this.playCard(currentPlayer.id, botDecision);
 				}
 			});
 		} else {
 			this.startTimer(this.options.moveTime, () => {
-				// Auto-play first legal card if player doesn't move in time
 				const player = this.getCurrentPlayer();
 				if (player.cards.length > 0 && this.gameState.adut) {
 					const legalCard = findLegalCard(
@@ -474,9 +464,7 @@ export class Belote extends EventEmitter {
 		const allPlayerCards = [...player.cards, ...player.talon];
 		const cardIndex = allPlayerCards.findIndex((c) => c.color === card.color && c.type === card.type);
 		if (cardIndex === -1) throw new Error('Card not found in player hand.');
-
-		// Check if the card can be legally played according to Belote rules
-		if (!this.gameState.adut) throw new Error('Adut must be chosen before playing cards.');
+		else if (!this.gameState.adut) throw new Error('Adut must be chosen before playing cards.');
 
 		const currentTrick = this.gameState.currentTrick?.cardsPlayed || [];
 		if (!canPlayCard(card, currentTrick, this.gameState.adut, allPlayerCards)) {
@@ -494,7 +482,6 @@ export class Belote extends EventEmitter {
 			player.talon.splice(cardInTalonIndex, 1);
 		}
 
-		// Add card to current trick
 		this.gameState.currentTrick!.cardsPlayed.push({
 			playerId: player.id,
 			...card,
@@ -502,17 +489,13 @@ export class Belote extends EventEmitter {
 
 		this.emit('cardPlayed', playerId, card);
 
-		// Check if trick is complete (4 cards played)
-		if (this.gameState.currentTrick!.cardsPlayed.length === 4) {
-			this.completeTrick();
-		} else {
-			// Move to next player
+		if (this.gameState.currentTrick!.cardsPlayed.length === 4) this.completeTrick();
+		else {
 			this.gameState.currentPlayerIndex = (this.gameState.currentPlayerIndex + 1) % 4;
 			this.emit('nextPlayerMove', this.getCurrentPlayer());
 
 			const nextPlayer = this.getCurrentPlayer();
 			if (nextPlayer.isBot) {
-				// MODIFIED: Handle bot card playing
 				this.handleBotAction(() => {
 					if (this.gameState.adut) {
 						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
@@ -521,6 +504,7 @@ export class Belote extends EventEmitter {
 							this.gameState.currentTrick?.cardsPlayed || [],
 							this.gameState.adut,
 						);
+
 						this.playCard(nextPlayer.id, botDecision);
 					}
 				});
@@ -534,9 +518,8 @@ export class Belote extends EventEmitter {
 							this.gameState.adut,
 							allPlayerCards,
 						);
-						if (legalCard) {
-							this.playCard(nextPlayer.id, legalCard);
-						}
+
+						if (legalCard) this.playCard(nextPlayer.id, legalCard);
 					}
 				});
 			}
@@ -544,36 +527,28 @@ export class Belote extends EventEmitter {
 	}
 
 	private completeTrick(): void {
-		// Determine winner of the trick (implement your logic here)
 		const winner = this.determineTrickWinner(this.gameState.currentTrick!);
 
 		this.gameState.currentTrick!.winnerPlayerId = winner.playerId;
 		this.gameState.currentTrick!.winningCard = { color: winner.color, type: winner.type };
 
-		// Add trick to appropriate team's history
 		const winnerPlayer = this.gameState.players.find((p) => p.id === winner.playerId)!;
 		const team = winnerPlayer.teamId === 1 ? this.gameState.team1 : this.gameState.team2;
 		team.tricksHistory.push(this.gameState.currentTrick!);
 
 		this.emit('trickCompleted', this.gameState.currentTrick!, winner.playerId);
 
-		// MODIFIED: Check if all players have no cards left (including talon)
 		const allPlayersEmpty = this.gameState.players.every((p) => p.cards.length === 0 && p.talon.length === 0);
 
-		if (allPlayersEmpty) {
-			this.completeRound();
-		} else {
-			// Start next trick with winner leading
+		if (allPlayersEmpty) this.completeRound();
+		else {
 			this.gameState.currentPlayerIndex = this.gameState.players.findIndex((p) => p.id === winner.playerId);
-			this.gameState.currentTrick = {
-				cardsPlayed: [],
-			};
+			this.gameState.currentTrick = { cardsPlayed: [] };
 
 			this.emit('nextTrickStarted', this.getCurrentPlayer());
 
 			const nextPlayer = this.getCurrentPlayer();
 			if (nextPlayer.isBot) {
-				// MODIFIED: Handle bot card playing
 				this.handleBotAction(() => {
 					if (this.gameState.adut) {
 						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
@@ -582,6 +557,7 @@ export class Belote extends EventEmitter {
 							this.gameState.currentTrick?.cardsPlayed || [],
 							this.gameState.adut,
 						);
+
 						this.playCard(nextPlayer.id, botDecision);
 					}
 				});
@@ -623,9 +599,17 @@ export class Belote extends EventEmitter {
 		this.gameState.team1.score.push(roundScores.team1);
 		this.gameState.team2.score.push(roundScores.team2);
 
-		this.emit('roundCompleted', roundScores);
+		const winningTeam = roundScores.team1 > roundScores.team2 ? this.gameState.team1 : this.gameState.team2;
 
-		// Check if game is over
+		const adutCallerId = this.gameState.bids.find((bid) => bid.call === this.gameState.adut)?.playerId;
+		const adutCallerTeam = this.gameState.players.find((p) => p.id === adutCallerId)?.teamId;
+
+		let failedTeam = undefined;
+		if (adutCallerTeam === 1 && roundScores.team1 === 0) failedTeam = this.gameState.team1;
+		else if (adutCallerTeam === 2 && roundScores.team2 === 0) failedTeam = this.gameState.team2;
+
+		this.emit('roundCompleted', this.gameState.round, roundScores, winningTeam, failedTeam);
+
 		const team1Total = this.gameState.team1.score.reduce((a, b) => a + b, 0);
 		const team2Total = this.gameState.team2.score.reduce((a, b) => a + b, 0);
 
@@ -636,7 +620,6 @@ export class Belote extends EventEmitter {
 
 			this.emit('gameEnded', this.gameState.winnerTeam);
 		} else {
-			// Start next round
 			this.startNextRound();
 		}
 	}
@@ -645,7 +628,6 @@ export class Belote extends EventEmitter {
 		let team1Points = 0;
 		let team2Points = 0;
 
-		// Calculate points from tricks
 		for (const team of [this.gameState.team1, this.gameState.team2]) {
 			let teamPoints = 0;
 
@@ -655,17 +637,15 @@ export class Belote extends EventEmitter {
 				}
 			}
 
-			// Last trick bonus
 			if (team.tricksHistory.length > 0) {
 				const lastTrick = team.tricksHistory[team.tricksHistory.length - 1]!;
 				const lastOverallTrick = this.getLastTrickOverall();
 
 				if (lastOverallTrick && this.areTricksEqual(lastTrick, lastOverallTrick)) {
-					teamPoints += 20; // Last trick bonus
+					teamPoints += 20;
 				}
 			}
 
-			// All tricks bonus
 			if (team.tricksHistory.length === 8) {
 				teamPoints += 90;
 			}
@@ -674,34 +654,36 @@ export class Belote extends EventEmitter {
 			else team2Points = teamPoints;
 		}
 
-		// Add calling points
 		const callingPoints = this.gameState.calls.reduce((sum, call) => sum + call.call, 0);
 		const totalGamePoints = 162 + callingPoints;
 		const passingScore = Math.floor(totalGamePoints / 2) + 1;
 
-		// Determine who called trump
 		const adutCallerId = this.gameState.bids.find((bid) => bid.call === this.gameState.adut)?.playerId;
 		const adutCallerTeam = this.gameState.players.find((p) => p.id === adutCallerId)?.teamId;
 
-		if (adutCallerTeam === 1) {
-			// Team 1 called trump
-			if (team1Points >= passingScore) {
-				// Team 1 passed - both teams keep their points
-				team1Points += callingPoints;
-			} else {
-				// Team 1 fell - Team 2 gets all points
-				team2Points = totalGamePoints;
-				team1Points = 0;
+		switch (adutCallerTeam) {
+			case 1: {
+				if (team1Points >= passingScore) team1Points += callingPoints;
+				else {
+					team2Points = totalGamePoints;
+					team1Points = 0;
+				}
+
+				break;
 			}
-		} else {
-			// Team 2 called trump
-			if (team2Points >= passingScore) {
-				// Team 2 passed - both teams keep their points
+			case 2: {
+				if (team2Points >= passingScore) team2Points += callingPoints;
+				else {
+					team1Points = totalGamePoints;
+					team2Points = 0;
+				}
+
+				break;
+			}
+			default: {
+				team1Points += callingPoints;
 				team2Points += callingPoints;
-			} else {
-				// Team 2 fell - Team 1 gets all points
-				team1Points = totalGamePoints;
-				team2Points = 0;
+				break;
 			}
 		}
 

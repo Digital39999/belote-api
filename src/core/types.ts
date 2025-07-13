@@ -156,7 +156,7 @@ export type BeloteEvents = {
 	gameEnded: (winnerTeam: Team) => void;
 
 	roundStarted: (roundNumber: number, dealer: Player) => void;
-	roundCompleted: (scores: { team1: number; team2: number; }) => void;
+	roundCompleted: (roundNumber: number, scores: { team1: number; team2: number }, winningTeam: Team, failedTeam?: Team) => void;
 
 	// Timer events.
 	timerUpdate: (timeLeft: number) => void;
