@@ -728,4 +728,6 @@ export interface Belote {
 	emit<K extends keyof BeloteEvents>(event: K, ...args: Parameters<BeloteEvents[K]>): boolean;
 	off<K extends keyof BeloteEvents>(event: K, listener: BeloteEvents[K]): this;
 	removeAllListeners<K extends keyof BeloteEvents>(event?: K): this;
+	addListener<K extends keyof BeloteEvents>(event: K, listener: BeloteEvents[K]): this;
+	once<K extends keyof BeloteEvents>(event: K, listener: BeloteEvents[K]): this;
 }
