@@ -1,6 +1,7 @@
 const path = require('path'); // eslint-disable-line @typescript-eslint/no-var-requires
 
 /** @type {import('webpack').Configuration} */
+
 module.exports = {
 	mode: 'production',
 	entry: './src/index.ts',

@@ -1,5 +1,5 @@
 {
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"name": "belote",
 	"author": "Digital39999",
 	"description": "A TypeScript library for playing Belote card game with bot support.",
@@ -36,12 +36,11 @@
 	"scripts": {
 		"ts": "pnpm install typescript --save-dev -g",
 		"init": "pnpm install && pnpm run build && pnpm run start",
-		"build": "pnpm run clean && pnpm run build:types && pnpm run build:cjs && pnpm run build:esm && pnpm run build:browser && pnpm run build:browser:esm",
+		"build": "pnpm run clean && pnpm run build:types && pnpm run build:cjs && pnpm run build:esm && pnpm run build:browser",
 		"build:types": "tsc --project tsconfig.types.json",
 		"build:cjs": "tsc --project tsconfig.cjs.json",
 		"build:esm": "tsc --project tsconfig.esm.json",
-		"build:browser": "webpack --config webpack.config.js",
-		"build:browser:esm": "webpack --config webpack.config.esm.cjs",
+		"build:browser": "webpack --config webpack.config.umd.cjs && webpack --config webpack.config.esm.cjs",
 		"clean": "rimraf dist",
 		"watch": "tsc --watch",
 		"lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",

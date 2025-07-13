@@ -10,7 +10,7 @@ module.exports = {
 		library: {
 			type: 'module',
 		},
-		clean: true,
+		clean: false,
 	},
 	experiments: {
 		outputModule: true,
