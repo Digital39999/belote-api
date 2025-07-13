@@ -32,20 +32,15 @@ jobs:
         uses: pnpm/action-setup@v3
         with:
           version: latest
-          
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-          
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v3
         with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-            
+            ${{ runner.os }}-pnpm-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
         
@@ -81,11 +76,7 @@ jobs:
       - name: Build the project
         if: steps.check_publish.outputs.should_publish == 'true'
         run: pnpm run build
-        
-      - name: Run tests
-        if: steps.check_publish.outputs.should_publish == 'true'
-        run: pnpm run test
-        
+
       - name: Publish to npm
         if: steps.check_publish.outputs.should_publish == 'true'
         run: pnpm publish --access public --no-git-checks

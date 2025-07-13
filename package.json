@@ -40,11 +40,10 @@
 		"build:browser": "webpack --config webpack.config.js",
 		"clean": "rimraf dist",
 		"watch": "tsc --watch",
-		"lint": "eslint . --ext .ts",
+		"lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
 		"updates": "pnpm npm-check-updates -i --format group",
 		"prepublishOnly": "pnpm run build && pnpm run lint",
-		"publish:npm": "pnpm publish --access public",
-		"test": "echo \"No tests yet\" && exit 0"
+		"publish:npm": "pnpm publish --access public"
 	},
 	"repository": {
 		"type": "git",
