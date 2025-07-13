@@ -471,7 +471,6 @@ export class Belote extends EventEmitter {
 		const currentPlayer = this.getCurrentPlayer();
 		if (player.id !== currentPlayer.id) throw new Error(`It's not player ${playerId}'s turn.`);
 
-		// MODIFIED: Check in both cards and talon for bots
 		const allPlayerCards = [...player.cards, ...player.talon];
 		const cardIndex = allPlayerCards.findIndex((c) => c.color === card.color && c.type === card.type);
 		if (cardIndex === -1) throw new Error('Card not found in player hand.');
@@ -486,7 +485,6 @@ export class Belote extends EventEmitter {
 
 		this.clearTimer();
 
-		// MODIFIED: Remove card from appropriate array
 		const cardInHandIndex = player.cards.findIndex((c) => c.color === card.color && c.type === card.type);
 		const cardInTalonIndex = player.talon.findIndex((c) => c.color === card.color && c.type === card.type);
 

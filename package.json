@@ -1,8 +1,8 @@
 {
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"name": "belote",
 	"author": "Digital39999",
-	"description": "A TypeScript library for playing Belote card game with bot support",
+	"description": "A TypeScript library for playing Belote card game with bot support.",
 	"keywords": [
 		"belot",
 		"belote",
