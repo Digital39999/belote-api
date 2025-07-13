@@ -1,0 +1,751 @@
+import { createDeck, shuffleCards, validateCalling, canPlayCard, findLegalCard, getHighestCall, compareCallStrength, canBeatCard, getCardValue } from './utils';
+import { GameState, GamePhase, CardColor, Player, Card, GameOptions, Callings, Trick, CallingsCall, cardColors, PlayedCard, BeloteEvents } from './types';
+import { EventEmitter } from 'events';
+import { BotAI } from './bot';
+
+export class Belote extends EventEmitter {
+	private timeoutId: NodeJS.Timeout | null = null;
+	private botAI: BotAI;
+
+	private readonly options: GameOptions;
+	public readonly gameState: GameState;
+
+	constructor (options?: Partial<GameOptions>) {
+		super();
+
+		this.options = Object.assign({
+			endValue: 501,
+			moveTime: 30,
+			botDelayMs: 1000,
+		}, options);
+
+		this.gameState = {
+			players: [],
+			team1: { id: 1, name: 'Team 1', score: [], tricksHistory: [] },
+			team2: { id: 2, name: 'Team 2', score: [], tricksHistory: [] },
+			deck: createDeck(),
+			round: 0,
+			adut: null,
+			bids: [],
+			calls: [],
+			gamePhase: GamePhase.Waiting,
+			currentTrick: null,
+			currentPlayerIndex: 0,
+			currentPlayerTimeLeft: this.options.moveTime,
+			isGameOver: false,
+		};
+
+		this.botAI = new BotAI();
+	}
+
+	public playerJoin(playerName?: string, teamId?: number, playerId?: string): Player {
+		if (this.gameState.players.length >= 4) throw new Error('Cannot add more than 4 players.');
+
+		const newPlayer: Player = {
+			id: playerId || `player-${this.gameState.players.length + 1}`,
+			name: playerName || `Player ${this.gameState.players.length + 1}`,
+			teamId: teamId || (this.gameState.players.length % 2 === 0 ? 1 : 2),
+			isReady: false,
+			isDealer: this.gameState.players.length === 0,
+			isBot: false,
+			cards: [],
+			talon: [],
+		};
+
+		this.gameState.players.push(newPlayer);
+		this.emit('playerJoined', newPlayer);
+		return newPlayer;
+	}
+
+	public addBot(botName?: string, teamId?: number): Player {
+		const newBot: Player = {
+			id: `bot-${this.gameState.players.length + 1}`,
+			name: botName || `Bot ${this.gameState.players.length + 1}`,
+			teamId: teamId || (this.gameState.players.length % 2 === 0 ? 1 : 2),
+			isReady: true,
+			isDealer: this.gameState.players.length === 0,
+			isBot: true,
+			cards: [],
+			talon: [],
+		};
+
+		this.gameState.players.push(newBot);
+		this.emit('playerJoined', newBot);
+
+		if (this.gameState.players.length === 4 && this.gameState.players.every((p) => p.isReady)) {
+			this.emit('allPlayersReady');
+		}
+
+		return newBot;
+	}
+
+	public playerLeave(playerId: string): void {
+		this.gameState.players = this.gameState.players.filter((player) => player.id !== playerId);
+		this.emit('playerLeft', playerId);
+	}
+
+	private updatePlayer(playerId: string, updates: Partial<Player> | ((player: Player) => Partial<Player>)): void {
+		const player = this.gameState.players.find((p) => p.id === playerId);
+		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
+
+		if (typeof updates === 'function') Object.assign(player, updates(player));
+		else Object.assign(player, updates);
+	}
+
+	public switchPlayerTeam(playerId: string, newTeamId: number): void {
+		const player = this.gameState.players.find((p) => p.id === playerId);
+		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
+		else if (newTeamId !== 1 && newTeamId !== 2) throw new Error(`Team ID ${newTeamId} does not exist.`);
+		else if (player.teamId === newTeamId) throw new Error(`Player with ID ${playerId} is already in team ${newTeamId}.`);
+		else if (this.gameState.players.filter((p) => p.teamId === newTeamId).length >= 2) throw new Error(`Team ${newTeamId} is already full.`);
+
+		this.updatePlayer(playerId, { teamId: newTeamId });
+		this.emit('playerSwitchedTeam', playerId, newTeamId);
+	}
+
+	public setPlayerReady(playerId: string, isReady: boolean): void {
+		const player = this.gameState.players.find((p) => p.id === playerId);
+		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
+
+		// Don't allow changing ready state for bots
+		if (player.isBot) return;
+
+		this.updatePlayer(playerId, { isReady });
+		this.emit('playerReadyChanged', playerId, isReady);
+
+		// Check if all players are ready to start
+		if (this.gameState.players.length === 4 && this.gameState.players.every((p) => p.isReady)) {
+			this.emit('allPlayersReady');
+		}
+	}
+
+	private clearTimer(): void {
+		if (this.timeoutId) {
+			clearTimeout(this.timeoutId);
+			this.timeoutId = null;
+		}
+	}
+
+	private startTimer(duration: number, onTimeout: () => void): void {
+		this.clearTimer();
+		this.gameState.currentPlayerTimeLeft = duration;
+
+		const startTime = Date.now();
+		const updateInterval = setInterval(() => {
+			const elapsed = Math.floor((Date.now() - startTime) / 1000);
+			this.gameState.currentPlayerTimeLeft = Math.max(0, duration - elapsed);
+			this.emit('timerUpdate', this.gameState.currentPlayerTimeLeft);
+
+			if (this.gameState.currentPlayerTimeLeft <= 0) clearInterval(updateInterval);
+		}, 1000);
+
+		this.timeoutId = setTimeout(() => {
+			clearInterval(updateInterval);
+			onTimeout();
+		}, duration * 1000);
+	}
+
+	// NEW METHOD: Handle bot actions with delay
+	private handleBotAction(action: () => void): void {
+		setTimeout(action, this.options.botDelayMs);
+	}
+
+	public startGame(): void {
+		if (this.gameState.players.length < 4) throw new Error('Need 4 players to start');
+		if (this.gameState.players.some((p) => !p.isReady)) throw new Error('All players must be ready');
+
+		// Reset game state
+		this.gameState.round = 0;
+		this.gameState.isGameOver = false;
+		this.gameState.team1.score = [];
+		this.gameState.team2.score = [];
+		this.gameState.team1.tricksHistory = [];
+		this.gameState.team2.tricksHistory = [];
+
+		this.emit('gameStarted', this.gameState);
+		this.startNextRound();
+	}
+
+	public startNextRound(): void {
+		if (this.gameState.isGameOver) return;
+
+		this.gameState.round++;
+		this.gameState.adut = null;
+		this.gameState.bids = [];
+		this.gameState.calls = [];
+		this.gameState.currentTrick = null;
+
+		for (const player of this.gameState.players) {
+			player.cards = [];
+			player.talon = [];
+		}
+
+		const currentDealerIndex = this.gameState.players.findIndex((p) => p.isDealer);
+		for (const player of this.gameState.players) this.updatePlayer(player.id, { isDealer: false });
+
+		const nextDealerIndex = (currentDealerIndex + 1) % 4;
+		const nextDealer = this.gameState.players[nextDealerIndex];
+		if (!nextDealer) throw new Error('No players available to be dealer.');
+
+		this.updatePlayer(nextDealer.id, { isDealer: true });
+		this.emit('roundStarted', this.gameState.round, this.gameState.players[nextDealerIndex]!);
+
+		this.dealInitialCards();
+	}
+
+	private dealInitialCards(): void {
+		this.gameState.gamePhase = GamePhase.Dealing;
+		this.gameState.deck = shuffleCards(createDeck());
+
+		for (let round = 0; round < 2; round++) {
+			for (const player of this.gameState.players) {
+				const threeCards = this.gameState.deck.splice(0, 3);
+				player.cards.push(...threeCards);
+			}
+		}
+
+		this.emit('initialCardsDealt', this.gameState.players.map((p) => ({
+			playerId: p.id,
+			cardCount: p.cards.length,
+		})));
+
+		this.startBidding();
+	}
+
+	public getCurrentPlayer(): Player {
+		return this.gameState.players[this.gameState.currentPlayerIndex]!;
+	}
+
+	private startBidding(): void {
+		this.gameState.gamePhase = GamePhase.Bidding;
+		const dealerIndex = this.gameState.players.findIndex((p) => p.isDealer);
+		this.gameState.currentPlayerIndex = (dealerIndex + 1) % 4;
+
+		this.emit('biddingStarted', this.getCurrentPlayer());
+
+		const currentPlayer = this.getCurrentPlayer();
+		if (currentPlayer.isBot) {
+			// MODIFIED: Handle bot bidding
+			this.handleBotAction(() => {
+				const botDecision = this.botAI.decideBid(currentPlayer, currentPlayer.isDealer);
+				this.bid(currentPlayer.id, botDecision);
+			});
+		} else {
+			this.startTimer(this.options.moveTime, () => {
+				this.bid(this.getCurrentPlayer().id, 'pass');
+			});
+		}
+	}
+
+	public bid(playerId: string, call: CardColor | 'pass'): void {
+		const player = this.gameState.players.find((p) => p.id === playerId);
+		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
+		if (this.gameState.gamePhase !== GamePhase.Bidding) throw new Error('Not in bidding phase.');
+
+		const currentPlayer = this.getCurrentPlayer();
+		if (player.id !== currentPlayer.id) throw new Error(`It's not player ${playerId}'s turn.`);
+		else if (call === 'pass' && player.isDealer) throw new Error('Dealer cannot pass during bidding.');
+
+		this.clearTimer();
+
+		this.gameState.bids.push({
+			playerId: player.id,
+			call: call === 'pass' ? null : call,
+		});
+
+		this.emit('bidMade', playerId, call);
+
+		if (call !== 'pass') {
+			this.gameState.adut = call;
+			this.emit('adutChosen', call, playerId);
+			this.dealTalon();
+			return;
+		}
+
+		this.advanceBidding();
+	}
+
+	private advanceBidding(): void {
+		this.gameState.currentPlayerIndex = (this.gameState.currentPlayerIndex + 1) % 4;
+
+		const adutCalls = this.gameState.bids.filter((c) => 'call' in c && (c.call === null || typeof c.call === 'string'));
+
+		if (adutCalls.length < 4) {
+			this.emit('nextPlayerBid', this.getCurrentPlayer());
+
+			const currentPlayer = this.getCurrentPlayer();
+			if (currentPlayer.isBot) {
+				// MODIFIED: Handle bot bidding
+				this.handleBotAction(() => {
+					const botDecision = this.botAI.decideBid(currentPlayer, currentPlayer.isDealer);
+					this.bid(currentPlayer.id, botDecision);
+				});
+			} else {
+				this.startTimer(this.options.moveTime, () => {
+					const currentPlayer = this.getCurrentPlayer();
+					const randomColor = cardColors[Math.floor(Math.random() * cardColors.length)]!;
+
+					this.bid(currentPlayer.id, currentPlayer.isDealer ? randomColor : 'pass');
+				});
+			}
+		}
+	}
+
+	private dealTalon(): void {
+		for (const player of this.gameState.players) {
+			const twoCards = this.gameState.deck.splice(0, 2);
+			player.talon.push(...twoCards);
+		}
+
+		this.emit('talonDealt', this.gameState.players.map((p) => ({
+			playerId: p.id,
+			talon: p.talon,
+		})));
+
+		this.startCallingPhase();
+	}
+
+	private startCallingPhase(): void {
+		this.gameState.gamePhase = GamePhase.Calling;
+		this.emit('callingPhaseStarted');
+
+		// MODIFIED: Handle bot calling
+		for (const player of this.gameState.players) {
+			if (player.isBot) {
+				this.handleBotAction(() => {
+					const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === player.id);
+					if (!hasAlreadyCalled && this.gameState.adut) {
+						const allPlayerCards = [...player.cards, ...player.talon];
+						const botDecision = this.botAI.decideCalling(
+							{ ...player, cards: allPlayerCards },
+							this.gameState.adut,
+						);
+						this.makeCall(player.id, botDecision);
+					}
+				});
+			}
+		}
+
+		this.startTimer(this.options.moveTime, () => {
+			for (const player of this.gameState.players) {
+				const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === player.id);
+				if (!hasAlreadyCalled) {
+					this.makeCall(player.id, []);
+				}
+			}
+		});
+	}
+
+	public makeCall(playerId: string, cards: Card[]): void {
+		const player = this.gameState.players.find((p) => p.id === playerId);
+		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
+		if (this.gameState.gamePhase !== GamePhase.Calling) throw new Error('Not in calling phase.');
+
+		// Check if player has already called
+		const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === playerId);
+		if (hasAlreadyCalled) throw new Error('Player has already made a call.');
+
+		if (!this.gameState.adut) throw new Error('Adut must be chosen before making calls.');
+		this.clearTimer();
+
+		const callingResult = validateCalling(cards, this.gameState.adut);
+		if (callingResult && cards.length > 0) {
+			this.gameState.calls.push({
+				playerId: player.id,
+				call: callingResult.type,
+				cards: cards,
+			});
+		}
+
+		if (callingResult && callingResult.type === Callings.Belot) {
+			const belotColor = cards[0]!.color;
+
+			this.gameState.isGameOver = true;
+			this.gameState.gamePhase = GamePhase.Finished;
+			const playerTeam = player.teamId === 1 ? this.gameState.team1 : this.gameState.team2;
+			this.gameState.winnerTeam = playerTeam;
+
+			this.emit('belotWin', playerId, belotColor);
+			this.emit('gameEnded', this.gameState.winnerTeam);
+			return;
+		}
+
+		this.emit('callMade', playerId, cards, callingResult);
+
+		if (this.gameState.calls.length === 4) {
+			this.resolveCalls();
+		}
+	}
+
+	private resolveCalls(): void {
+		const team1Calls = this.gameState.calls.filter((call) => {
+			const player = this.gameState.players.find((p) => p.id === call.playerId);
+			return player?.teamId === 1;
+		});
+
+		const team2Calls = this.gameState.calls.filter((call) => {
+			const player = this.gameState.players.find((p) => p.id === call.playerId);
+			return player?.teamId === 2;
+		});
+
+		// Get highest call for each team
+		const team1HighestCall = getHighestCall(team1Calls);
+		const team2HighestCall = getHighestCall(team2Calls);
+
+		// Determine winner
+		let winningCall: CallingsCall | null = null;
+
+		if (!team1HighestCall && !team2HighestCall) {
+			// No calls made
+			winningCall = null;
+		} else if (!team1HighestCall) {
+			winningCall = team2HighestCall;
+		} else if (!team2HighestCall) {
+			winningCall = team1HighestCall;
+		} else {
+			// Both teams have calls - compare them
+			const comparison = compareCallStrength(team1HighestCall, team2HighestCall);
+			if (comparison > 0) winningCall = team1HighestCall;
+			else if (comparison < 0) winningCall = team2HighestCall;
+			else {
+				const adutCaller = this.gameState.bids.find((bid) => bid.call === this.gameState.adut)?.playerId;
+				const adutCallerTeam = this.gameState.players.find((p) => p.id === adutCaller)?.teamId;
+
+				if (adutCallerTeam === 1) winningCall = team1HighestCall;
+				else winningCall = team2HighestCall;
+			}
+		}
+
+		this.gameState.calls = winningCall ? [winningCall] : [];
+
+		this.emit('callingPhaseEnded', winningCall);
+		this.startPlayingPhase();
+	}
+
+	private startPlayingPhase(): void {
+		this.gameState.gamePhase = GamePhase.Playing;
+		this.gameState.currentPlayerIndex = 0; // Start with first player
+		this.gameState.currentTrick = {
+			cardsPlayed: [],
+		};
+
+		this.emit('playingPhaseStarted');
+		this.emit('nextPlayerMove', this.getCurrentPlayer());
+
+		const currentPlayer = this.getCurrentPlayer();
+		if (currentPlayer.isBot) {
+			// MODIFIED: Handle bot card playing
+			this.handleBotAction(() => {
+				if (this.gameState.adut) {
+					const allPlayerCards = [...currentPlayer.cards, ...currentPlayer.talon];
+					const botDecision = this.botAI.decideCardToPlay(
+						{ ...currentPlayer, cards: allPlayerCards },
+						this.gameState.currentTrick?.cardsPlayed || [],
+						this.gameState.adut,
+					);
+					this.playCard(currentPlayer.id, botDecision);
+				}
+			});
+		} else {
+			this.startTimer(this.options.moveTime, () => {
+				// Auto-play first legal card if player doesn't move in time
+				const player = this.getCurrentPlayer();
+				if (player.cards.length > 0 && this.gameState.adut) {
+					const legalCard = findLegalCard(
+						this.gameState.currentTrick?.cardsPlayed || [],
+						this.gameState.adut,
+						player.cards,
+					);
+
+					if (legalCard) this.playCard(player.id, legalCard);
+				}
+			});
+		}
+	}
+
+	public playCard(playerId: string, card: Card): void {
+		const player = this.gameState.players.find((p) => p.id === playerId);
+		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
+		if (this.gameState.gamePhase !== GamePhase.Playing) throw new Error('Not in playing phase.');
+
+		const currentPlayer = this.getCurrentPlayer();
+		if (player.id !== currentPlayer.id) throw new Error(`It's not player ${playerId}'s turn.`);
+
+		// MODIFIED: Check in both cards and talon for bots
+		const allPlayerCards = [...player.cards, ...player.talon];
+		const cardIndex = allPlayerCards.findIndex((c) => c.color === card.color && c.type === card.type);
+		if (cardIndex === -1) throw new Error('Card not found in player hand.');
+
+		// Check if the card can be legally played according to Belote rules
+		if (!this.gameState.adut) throw new Error('Adut must be chosen before playing cards.');
+
+		const currentTrick = this.gameState.currentTrick?.cardsPlayed || [];
+		if (!canPlayCard(card, currentTrick, this.gameState.adut, allPlayerCards)) {
+			throw new Error('This card cannot be played according to Belote rules.');
+		}
+
+		this.clearTimer();
+
+		// MODIFIED: Remove card from appropriate array
+		const cardInHandIndex = player.cards.findIndex((c) => c.color === card.color && c.type === card.type);
+		const cardInTalonIndex = player.talon.findIndex((c) => c.color === card.color && c.type === card.type);
+
+		if (cardInHandIndex !== -1) {
+			player.cards.splice(cardInHandIndex, 1);
+		} else if (cardInTalonIndex !== -1) {
+			player.talon.splice(cardInTalonIndex, 1);
+		}
+
+		// Add card to current trick
+		this.gameState.currentTrick!.cardsPlayed.push({
+			playerId: player.id,
+			...card,
+		});
+
+		this.emit('cardPlayed', playerId, card);
+
+		// Check if trick is complete (4 cards played)
+		if (this.gameState.currentTrick!.cardsPlayed.length === 4) {
+			this.completeTrick();
+		} else {
+			// Move to next player
+			this.gameState.currentPlayerIndex = (this.gameState.currentPlayerIndex + 1) % 4;
+			this.emit('nextPlayerMove', this.getCurrentPlayer());
+
+			const nextPlayer = this.getCurrentPlayer();
+			if (nextPlayer.isBot) {
+				// MODIFIED: Handle bot card playing
+				this.handleBotAction(() => {
+					if (this.gameState.adut) {
+						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
+						const botDecision = this.botAI.decideCardToPlay(
+							{ ...nextPlayer, cards: allPlayerCards },
+							this.gameState.currentTrick?.cardsPlayed || [],
+							this.gameState.adut,
+						);
+						this.playCard(nextPlayer.id, botDecision);
+					}
+				});
+			} else {
+				this.startTimer(this.options.moveTime, () => {
+					const nextPlayer = this.getCurrentPlayer();
+					if (nextPlayer.cards.length > 0 && this.gameState.adut) {
+						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
+						const legalCard = findLegalCard(
+							this.gameState.currentTrick?.cardsPlayed || [],
+							this.gameState.adut,
+							allPlayerCards,
+						);
+						if (legalCard) {
+							this.playCard(nextPlayer.id, legalCard);
+						}
+					}
+				});
+			}
+		}
+	}
+
+	private completeTrick(): void {
+		// Determine winner of the trick (implement your logic here)
+		const winner = this.determineTrickWinner(this.gameState.currentTrick!);
+
+		this.gameState.currentTrick!.winnerPlayerId = winner.playerId;
+		this.gameState.currentTrick!.winningCard = { color: winner.color, type: winner.type };
+
+		// Add trick to appropriate team's history
+		const winnerPlayer = this.gameState.players.find((p) => p.id === winner.playerId)!;
+		const team = winnerPlayer.teamId === 1 ? this.gameState.team1 : this.gameState.team2;
+		team.tricksHistory.push(this.gameState.currentTrick!);
+
+		this.emit('trickCompleted', this.gameState.currentTrick!, winner.playerId);
+
+		// MODIFIED: Check if all players have no cards left (including talon)
+		const allPlayersEmpty = this.gameState.players.every((p) => p.cards.length === 0 && p.talon.length === 0);
+
+		if (allPlayersEmpty) {
+			this.completeRound();
+		} else {
+			// Start next trick with winner leading
+			this.gameState.currentPlayerIndex = this.gameState.players.findIndex((p) => p.id === winner.playerId);
+			this.gameState.currentTrick = {
+				cardsPlayed: [],
+			};
+
+			this.emit('nextTrickStarted', this.getCurrentPlayer());
+
+			const nextPlayer = this.getCurrentPlayer();
+			if (nextPlayer.isBot) {
+				// MODIFIED: Handle bot card playing
+				this.handleBotAction(() => {
+					if (this.gameState.adut) {
+						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
+						const botDecision = this.botAI.decideCardToPlay(
+							{ ...nextPlayer, cards: allPlayerCards },
+							this.gameState.currentTrick?.cardsPlayed || [],
+							this.gameState.adut,
+						);
+						this.playCard(nextPlayer.id, botDecision);
+					}
+				});
+			} else {
+				this.startTimer(this.options.moveTime, () => {
+					const nextPlayer = this.getCurrentPlayer();
+					if ((nextPlayer.cards.length > 0 || nextPlayer.talon.length > 0) && this.gameState.adut) {
+						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
+						const legalCard = findLegalCard(
+							this.gameState.currentTrick?.cardsPlayed || [],
+							this.gameState.adut,
+							allPlayerCards,
+						);
+
+						if (legalCard) this.playCard(nextPlayer.id, legalCard);
+					}
+				});
+			}
+		}
+	}
+
+	private determineTrickWinner(trick: Trick): PlayedCard {
+		if (!this.gameState.adut) throw new Error('Adut must be set to determine trick winner.');
+
+		let winningCard = trick.cardsPlayed[0]!;
+
+		for (const playedCard of trick.cardsPlayed) {
+			if (canBeatCard(playedCard, winningCard, this.gameState.adut)) {
+				winningCard = playedCard;
+			}
+		}
+
+		return winningCard;
+	}
+
+	private completeRound(): void {
+		const roundScores = this.calculateRoundScores();
+
+		this.gameState.team1.score.push(roundScores.team1);
+		this.gameState.team2.score.push(roundScores.team2);
+
+		this.emit('roundCompleted', roundScores);
+
+		// Check if game is over
+		const team1Total = this.gameState.team1.score.reduce((a, b) => a + b, 0);
+		const team2Total = this.gameState.team2.score.reduce((a, b) => a + b, 0);
+
+		if (team1Total >= this.options.endValue || team2Total >= this.options.endValue) {
+			this.gameState.isGameOver = true;
+			this.gameState.gamePhase = GamePhase.Finished;
+			this.gameState.winnerTeam = team1Total > team2Total ? this.gameState.team1 : this.gameState.team2;
+
+			this.emit('gameEnded', this.gameState.winnerTeam);
+		} else {
+			// Start next round
+			this.startNextRound();
+		}
+	}
+
+	private calculateRoundScores(): { team1: number; team2: number } {
+		let team1Points = 0;
+		let team2Points = 0;
+
+		// Calculate points from tricks
+		for (const team of [this.gameState.team1, this.gameState.team2]) {
+			let teamPoints = 0;
+
+			for (const trick of team.tricksHistory) {
+				for (const card of trick.cardsPlayed) {
+					teamPoints += getCardValue(card, this.gameState.adut!);
+				}
+			}
+
+			// Last trick bonus
+			if (team.tricksHistory.length > 0) {
+				const lastTrick = team.tricksHistory[team.tricksHistory.length - 1]!;
+				const lastOverallTrick = this.getLastTrickOverall();
+
+				if (lastOverallTrick && this.areTricksEqual(lastTrick, lastOverallTrick)) {
+					teamPoints += 20; // Last trick bonus
+				}
+			}
+
+			// All tricks bonus
+			if (team.tricksHistory.length === 8) {
+				teamPoints += 90;
+			}
+
+			if (team.id === 1) team1Points = teamPoints;
+			else team2Points = teamPoints;
+		}
+
+		// Add calling points
+		const callingPoints = this.gameState.calls.reduce((sum, call) => sum + call.call, 0);
+		const totalGamePoints = 162 + callingPoints;
+		const passingScore = Math.floor(totalGamePoints / 2) + 1;
+
+		// Determine who called trump
+		const adutCallerId = this.gameState.bids.find((bid) => bid.call === this.gameState.adut)?.playerId;
+		const adutCallerTeam = this.gameState.players.find((p) => p.id === adutCallerId)?.teamId;
+
+		if (adutCallerTeam === 1) {
+			// Team 1 called trump
+			if (team1Points >= passingScore) {
+				// Team 1 passed - both teams keep their points
+				team1Points += callingPoints;
+			} else {
+				// Team 1 fell - Team 2 gets all points
+				team2Points = totalGamePoints;
+				team1Points = 0;
+			}
+		} else {
+			// Team 2 called trump
+			if (team2Points >= passingScore) {
+				// Team 2 passed - both teams keep their points
+				team2Points += callingPoints;
+			} else {
+				// Team 2 fell - Team 1 gets all points
+				team1Points = totalGamePoints;
+				team2Points = 0;
+			}
+		}
+
+		return { team1: team1Points, team2: team2Points };
+	}
+
+	private getLastTrickOverall(): Trick | null {
+		const allTricks = [...this.gameState.team1.tricksHistory, ...this.gameState.team2.tricksHistory];
+		return allTricks.length > 0 ? allTricks[allTricks.length - 1]! : null;
+	}
+
+	private areTricksEqual(trick1: Trick, trick2: Trick): boolean {
+		for (let i = 0; i < trick1.cardsPlayed.length; i++) {
+			const card1 = trick1.cardsPlayed[i]!;
+			const card2 = trick2.cardsPlayed[i]!;
+
+			if (card1.playerId !== card2.playerId || card1.color !== card2.color || card1.type !== card2.type) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public getPlayerById(playerId: string): Player | null {
+		return this.gameState.players.find((p) => p.id === playerId) || null;
+	}
+
+	public getPlayersByTeam(teamId: number): Player[] {
+		return this.gameState.players.filter((p) => p.teamId === teamId);
+	}
+
+	public destroy(): void {
+		this.clearTimer();
+		this.removeAllListeners();
+	}
+}
+
+// Declarations.
+export interface Belote {
+	on<K extends keyof BeloteEvents>(event: K, listener: BeloteEvents[K]): this;
+	emit<K extends keyof BeloteEvents>(event: K, ...args: Parameters<BeloteEvents[K]>): boolean;
+	off<K extends keyof BeloteEvents>(event: K, listener: BeloteEvents[K]): this;
+	removeAllListeners<K extends keyof BeloteEvents>(event?: K): this;
+}

@@ -1,0 +1,74 @@
+{
+	"version": "1.0.0",
+	"name": "belote",
+	"author": "Digital39999",
+	"description": "A TypeScript library for playing Belote card game with bot support",
+	"keywords": [
+		"belot",
+		"belote",
+		"card-game",
+		"typescript",
+		"bot",
+		"game"
+	],
+	"main": "dist/cjs/index.js",
+	"module": "dist/esm/index.js",
+	"types": "dist/types/index.d.ts",
+	"browser": "dist/browser/belote-api.min.js",
+	"unpkg": "dist/browser/belote-api.min.js",
+	"jsdelivr": "dist/browser/belote-api.min.js",
+	"exports": {
+		".": {
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js",
+			"browser": "./dist/browser/belote-api.min.js",
+			"types": "./dist/types/index.d.ts"
+		}
+	},
+	"files": [
+		"dist/",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"ts": "pnpm install typescript --save-dev -g",
+		"init": "pnpm install && pnpm run build && pnpm run start",
+		"build": "pnpm run clean && pnpm run build:types && pnpm run build:cjs && pnpm run build:esm && pnpm run build:browser",
+		"build:types": "tsc --project tsconfig.types.json",
+		"build:cjs": "tsc --project tsconfig.cjs.json",
+		"build:esm": "tsc --project tsconfig.esm.json",
+		"build:browser": "webpack --config webpack.config.js",
+		"clean": "rimraf dist",
+		"watch": "tsc --watch",
+		"lint": "eslint . --ext .ts",
+		"updates": "pnpm npm-check-updates -i --format group",
+		"prepublishOnly": "pnpm run build && pnpm run lint",
+		"publish:npm": "pnpm publish --access public",
+		"test": "echo \"No tests yet\" && exit 0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Digital39999/belote-api"
+	},
+	"bugs": {
+		"url": "https://github.com/Digital39999/belote-api/issues"
+	},
+	"homepage": "https://github.com/Digital39999/belote-api#readme",
+	"license": "GPL-3.0",
+	"devDependencies": {
+		"@types/node": "^20.14.13",
+		"@typescript-eslint/eslint-plugin": "^6.18.0",
+		"@typescript-eslint/parser": "^6.18.0",
+		"eslint": "^8.56.0",
+		"events": "^3.3.0",
+		"rimraf": "^5.0.0",
+		"ts-loader": "^9.4.0",
+		"typescript": "^5.3.3",
+		"webpack": "^5.88.0",
+		"webpack-cli": "^5.1.0"
+	},
+	"engines": {
+		"node": ">=20.2.0"
+	},
+	"sideEffects": false
+}
