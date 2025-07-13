@@ -4,8 +4,14 @@ on:
   push:
     branches:
       - main
-  release:
-    types: [published]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'tsconfig.*.json'
+      - 'webpack.config.js'
+      - 'pnpm-lock.yaml'
+
   workflow_dispatch:
 
 jobs:
