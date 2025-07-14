@@ -101,6 +101,8 @@ export type Player = {
 	name: string;
 	teamId: number;
 
+	color?: string; // Color for UI representation, not game logic.
+
 	isReady: boolean;
 	isDealer: boolean;
 	isBot: boolean;
@@ -144,12 +146,15 @@ export type GameState = {
 
 // Declarations.
 export type BeloteEvents = {
-	// Player management events
+	// Player management events.
 	playerJoined: (player: Player) => void;
 	playerLeft: (playerId: string) => void;
 	playerSwitchedTeam: (playerId: string, newTeamId: number) => void;
 	playerReadyChanged: (playerId: string, isReady: boolean) => void;
+
+	// Ready state events.
 	allPlayersReady: () => void;
+	notEnoughPlayers: () => void;
 
 	// Game lifecycle events.
 	gameStarted: (gameState: GameState) => void;

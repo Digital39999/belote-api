@@ -38,60 +38,63 @@ export class Belote extends EventEmitter {
 		this.botAI = new BotAI();
 	}
 
-	public playerJoin(playerName?: string, teamId?: number, playerId?: string): Player {
+	private createPlayer(playerName?: string, options?: Partial<Pick<Player, 'color' | 'id' | 'teamId' | 'isReady' | 'isBot'>>): Player {
 		if (this.gameState.players.length >= 4) throw new Error('Cannot add more than 4 players.');
-		else if (playerId && this.gameState.players.some((p) => p.id === playerId)) throw new Error(`Player with ID ${playerId} already exists.`);
-		else if (teamId && teamId !== 1 && teamId !== 2) throw new Error(`Invalid team ID: ${teamId}. Must be 1 or 2.`);
-		else if (teamId && this.gameState.players.filter((p) => p.teamId === teamId).length >= 2) throw new Error(`Team ${teamId} is already full.`);
+		else if (options?.id && this.gameState.players.some((p) => p.id === options.id)) throw new Error(`Player with ID ${options.id} already exists.`);
+		else if (options?.teamId && options.teamId !== 1 && options.teamId !== 2) throw new Error(`Invalid team ID: ${options.teamId}. Must be 1 or 2.`);
+		else if (options?.teamId && this.gameState.players.filter((p) => p.teamId === options.teamId).length >= 2) throw new Error(`Team ${options.teamId} is already full.`);
+
+		const idPrefix = options?.isBot ? 'bot' : 'player';
+		const defaultName = options?.isBot ? 'Bot' : 'Player';
+		const playerIndex = this.gameState.players.length + 1;
 
 		const newPlayer: Player = {
-			id: playerId || `player-${this.gameState.players.length + 1}`,
-			name: playerName || `Player ${this.gameState.players.length + 1}`,
-			teamId: teamId || (this.gameState.players.length % 2 === 0 ? 1 : 2),
-			isReady: false,
+			id: options?.id || `${idPrefix}-${playerIndex}`,
+			name: playerName || `${defaultName} ${playerIndex}`,
+			teamId: options?.teamId || (this.gameState.players.length % 2 === 0 ? 1 : 2),
+			isReady: options?.isBot ? true : options?.isReady || false,
 			isDealer: this.gameState.players.length === 0,
-			isBot: false,
+			isBot: options?.isBot || false,
 			cards: [],
 			talon: [],
 		};
 
 		this.gameState.players.push(newPlayer);
 		this.emit('playerJoined', newPlayer);
-		return newPlayer;
-	}
-
-	public addBot(botName?: string, teamId?: number): Player {
-		if (this.gameState.players.length >= 4) throw new Error('Cannot add more than 4 players.');
-		else if (teamId && teamId !== 1 && teamId !== 2) throw new Error(`Invalid team ID: ${teamId}. Must be 1 or 2.`);
-		else if (teamId && this.gameState.players.filter((p) => p.teamId === teamId).length >= 2) throw new Error(`Team ${teamId} is already full.`);
-
-		const newBot: Player = {
-			id: `bot-${this.gameState.players.length + 1}`,
-			name: botName || `Bot ${this.gameState.players.length + 1}`,
-			teamId: teamId || (this.gameState.players.length % 2 === 0 ? 1 : 2),
-			isReady: true,
-			isDealer: this.gameState.players.length === 0,
-			isBot: true,
-			cards: [],
-			talon: [],
-		};
-
-		this.gameState.players.push(newBot);
-		this.emit('playerJoined', newBot);
 
 		if (this.gameState.players.length === 4 && this.gameState.players.every((p) => p.isReady)) {
 			this.emit('allPlayersReady');
 		}
 
-		return newBot;
+		return newPlayer;
+	}
+
+	public playerJoin(playerName?: string, options?: Partial<Pick<Player, 'color' | 'id' | 'teamId' | 'isReady'>>): Player {
+		return this.createPlayer(playerName, options);
 	}
 
 	public playerLeave(playerId: string): void {
-		this.gameState.players = this.gameState.players.filter((player) => player.id !== playerId);
-		this.emit('playerLeft', playerId);
+		const playerIndex = this.gameState.players.findIndex((p) => p.id === playerId);
+		if (playerIndex === -1) throw new Error(`Player with ID ${playerId} does not exist.`);
+
+		const [removedPlayer] = this.gameState.players.splice(playerIndex, 1);
+		this.emit('playerLeft', removedPlayer!.id);
+
+		if (this.gameState.players.length < 4) {
+			this.clearTimer();
+			this.emit('notEnoughPlayers');
+		}
 	}
 
-	private updatePlayer(playerId: string, updates: Partial<Player> | ((player: Player) => Partial<Player>)): void {
+	public addBot(botName?: string, options?: Partial<Pick<Player, 'color' | 'id' | 'teamId'>>): Player {
+		return this.createPlayer(botName, { ...options, isBot: true, isReady: true });
+	}
+
+	public removeBot(botId: string): void {
+		this.playerLeave(botId);
+	}
+
+	public updatePlayer(playerId: string, updates: Partial<Player> | ((player: Player) => Partial<Player>)): void {
 		const player = this.gameState.players.find((p) => p.id === playerId);
 		if (!player) throw new Error(`Player with ID ${playerId} does not exist.`);
 
