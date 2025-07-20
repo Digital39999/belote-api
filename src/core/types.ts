@@ -96,6 +96,9 @@ export type Team = {
 	tricksHistory: Trick[];
 }
 
+export type AllowedPlayerKeys = 'color' | 'id' | 'teamId';
+export type PartialPlayer = Pick<Player, AllowedPlayerKeys | 'name'>;
+
 export type Player = {
 	id: string;
 	name: string;

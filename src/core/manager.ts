@@ -1,23 +1,21 @@
+import { GameState, GamePhase, CardColor, Player, Card, GameOptions, Callings, Trick, CallingsCall, cardColors, PlayedCard, BeloteEvents, AllowedPlayerKeys } from './types';
 import { createDeck, shuffleCards, validateCalling, canPlayCard, findLegalCard, getHighestCall, compareCallStrength, canBeatCard, getCardValue } from './utils';
-import { GameState, GamePhase, CardColor, Player, Card, GameOptions, Callings, Trick, CallingsCall, cardColors, PlayedCard, BeloteEvents } from './types';
 import { EventEmitter } from 'events';
 import { BotAI } from './bot';
 
 export class Belote extends EventEmitter {
 	private timeoutId: NodeJS.Timeout | null = null;
-	private botAI: BotAI;
-
-	private readonly options: GameOptions;
+	public readonly options: GameOptions;
 	public readonly gameState: GameState;
 
-	constructor (options?: Partial<GameOptions>) {
+	constructor (init?: Partial<GameOptions>) {
 		super();
 
 		this.options = Object.assign({
 			endValue: 501,
 			moveTime: 30,
 			botDelayMs: 1000,
-		}, options);
+		}, init);
 
 		this.gameState = {
 			players: [],
@@ -34,11 +32,9 @@ export class Belote extends EventEmitter {
 			currentPlayerTimeLeft: this.options.moveTime,
 			isGameOver: false,
 		};
-
-		this.botAI = new BotAI();
 	}
 
-	private createPlayer(playerName?: string, options?: Partial<Pick<Player, 'color' | 'id' | 'teamId' | 'isReady' | 'isBot'>>): Player {
+	private createPlayer(playerName?: string, options?: Partial<Pick<Player, AllowedPlayerKeys | 'isReady' | 'isBot'>>): Player {
 		if (this.gameState.players.length >= 4) throw new Error('Cannot add more than 4 players.');
 		else if (options?.id && this.gameState.players.some((p) => p.id === options.id)) throw new Error(`Player with ID ${options.id} already exists.`);
 		else if (options?.teamId && options.teamId !== 1 && options.teamId !== 2) throw new Error(`Invalid team ID: ${options.teamId}. Must be 1 or 2.`);
@@ -69,7 +65,7 @@ export class Belote extends EventEmitter {
 		return newPlayer;
 	}
 
-	public playerJoin(playerName?: string, options?: Partial<Pick<Player, 'color' | 'id' | 'teamId' | 'isReady'>>): Player {
+	public playerJoin(playerName?: string, options?: Partial<Pick<Player, AllowedPlayerKeys>>): Player {
 		return this.createPlayer(playerName, options);
 	}
 
@@ -86,7 +82,7 @@ export class Belote extends EventEmitter {
 		}
 	}
 
-	public addBot(botName?: string, options?: Partial<Pick<Player, 'color' | 'id' | 'teamId'>>): Player {
+	public addBot(botName?: string, options?: Partial<Pick<Player, AllowedPlayerKeys>>): Player {
 		return this.createPlayer(botName, { ...options, isBot: true, isReady: true });
 	}
 
@@ -231,7 +227,7 @@ export class Belote extends EventEmitter {
 		const currentPlayer = this.getCurrentPlayer();
 		if (currentPlayer.isBot) {
 			this.handleBotAction(() => {
-				const botDecision = this.botAI.decideBid(currentPlayer, currentPlayer.isDealer);
+				const botDecision = BotAI.decideBid(currentPlayer);
 				this.bid(currentPlayer.id, botDecision);
 			});
 		} else {
@@ -280,7 +276,7 @@ export class Belote extends EventEmitter {
 			const currentPlayer = this.getCurrentPlayer();
 			if (currentPlayer.isBot) {
 				this.handleBotAction(() => {
-					const botDecision = this.botAI.decideBid(currentPlayer, currentPlayer.isDealer);
+					const botDecision = BotAI.decideBid(currentPlayer);
 					this.bid(currentPlayer.id, botDecision);
 				});
 			} else {
@@ -318,7 +314,7 @@ export class Belote extends EventEmitter {
 					const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === player.id);
 					if (!hasAlreadyCalled && this.gameState.adut) {
 						const allPlayerCards = [...player.cards, ...player.talon];
-						const botDecision = this.botAI.decideCalling(
+						const botDecision = BotAI.decideCalling(
 							{ ...player, cards: allPlayerCards },
 							this.gameState.adut,
 						);
@@ -431,7 +427,7 @@ export class Belote extends EventEmitter {
 			this.handleBotAction(() => {
 				if (this.gameState.adut) {
 					const allPlayerCards = [...currentPlayer.cards, ...currentPlayer.talon];
-					const botDecision = this.botAI.decideCardToPlay(
+					const botDecision = BotAI.decideCardToPlay(
 						{ ...currentPlayer, cards: allPlayerCards },
 						this.gameState.currentTrick?.cardsPlayed || [],
 						this.gameState.adut,
@@ -502,7 +498,7 @@ export class Belote extends EventEmitter {
 				this.handleBotAction(() => {
 					if (this.gameState.adut) {
 						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
-						const botDecision = this.botAI.decideCardToPlay(
+						const botDecision = BotAI.decideCardToPlay(
 							{ ...nextPlayer, cards: allPlayerCards },
 							this.gameState.currentTrick?.cardsPlayed || [],
 							this.gameState.adut,
@@ -555,7 +551,7 @@ export class Belote extends EventEmitter {
 				this.handleBotAction(() => {
 					if (this.gameState.adut) {
 						const allPlayerCards = [...nextPlayer.cards, ...nextPlayer.talon];
-						const botDecision = this.botAI.decideCardToPlay(
+						const botDecision = BotAI.decideCardToPlay(
 							{ ...nextPlayer, cards: allPlayerCards },
 							this.gameState.currentTrick?.cardsPlayed || [],
 							this.gameState.adut,
