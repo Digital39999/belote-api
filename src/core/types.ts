@@ -82,6 +82,7 @@ export type GameOptions = {
 	endValue: EndValue;
 	moveTimeSec: MoveTime;
 	botDelayMs: number;
+	pauseBetweenRoundsMs: number;
 }
 
 export type CallingResult = {

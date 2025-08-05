@@ -31,11 +31,15 @@ export function getCardValue(card: Card, adut: CardColor) {
 }
 
 export function getCardImageUrl(card: Card, size: 'large' | 'medium' | 'small' = 'medium', imageProvider: string): string {
-	return `${imageProvider}/${size}/${card.color}/${card.type.toLowerCase()}.webp`;
+	const localizedColor = cardColorLocalized(card.color);
+	const localizedType = cardTypeLocalized(card.type);
+
+	return `${imageProvider}/${size}/${localizedColor}/${localizedType}.webp`;
 }
 
 export function getCardColorImageUrl(color: CardColor, size: 'large' | 'medium' | 'small' = 'medium', imageProvider: string): string {
-	return `${imageProvider}/${size}/icons/${color}.webp`;
+	const localizedColor = cardColorLocalized(color);
+	return `${imageProvider}/${size}/colors/${localizedColor}.webp`;
 }
 
 export function createDeck(shuffle: number = 1): Card[] {
