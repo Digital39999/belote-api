@@ -26,8 +26,13 @@ export function shuffleCards(deck: Card[], times: number = 1, rng?: () => number
 }
 
 export function getCardValue(card: Card, adut: CardColor) {
-	if (card.color === adut) return CardPointsAdut[card.type];
-	else return CardPoints[card.type];
+	if (card.color === adut) return CardPointsAdut[firstLetterUpperCase(card.type)];
+	else return CardPoints[firstLetterUpperCase(card.type)];
+}
+
+export function firstLetterUpperCase<T extends string>(str: T): Capitalize<T> {
+	if (str.length === 0) return str as Capitalize<T>;
+	return str.charAt(0).toUpperCase() + str.slice(1) as Capitalize<T>;
 }
 
 export function getCardImageUrl(card: Card, size: 'large' | 'medium' | 'small' = 'medium', imageProvider: string): string {
@@ -67,13 +72,13 @@ export function validateCalling(cards: Card[], adut: CardColor): CallingResult |
 	let bestCall: CallingResult | null = null;
 
 	const cardsByColor: Record<CardColor, Card[]> = { hearts: [], diamonds: [], clubs: [], spades: [] };
-	const cardsByType: Record<CardType, Card[]> = {
+	const cardsByType: Record<Capitalize<CardType>, Card[]> = {
 		Ace: [], King: [], Queen: [], Jack: [], Ten: [], Nine: [], Eight: [], Seven: [],
 	};
 
 	for (const card of cards) {
 		cardsByColor[card.color].push(card);
-		cardsByType[card.type].push(card);
+		cardsByType[firstLetterUpperCase(card.type)].push(card);
 	}
 
 	const tryUpdateBest = (call: CallingResult) => {
@@ -88,14 +93,14 @@ export function validateCalling(cards: Card[], adut: CardColor): CallingResult |
 	}
 
 	// 2. Check Bela: exactly 2 cards - King and Queen of adut.
-	if (cards.length === 2 && cardsByColor[adut].some((c) => c.type === 'King') && cardsByColor[adut].some((c) => c.type === 'Queen')) {
-		if (cards.every((c) => c.color === adut && (c.type === 'King' || c.type === 'Queen'))) {
+	if (cards.length === 2 && cardsByColor[adut].some((c) => c.type === 'king') && cardsByColor[adut].some((c) => c.type === 'queen')) {
+		if (cards.every((c) => c.color === adut && (c.type === 'king' || c.type === 'queen'))) {
 			tryUpdateBest({ type: Callings.Bela });
 		}
 	}
 
 	// 2. Check four of a kind.
-	for (const type of ['Jack', 'Nine', 'Ace', 'King', 'Queen', 'Ten'] as CardType[]) {
+	for (const type of ['Jack', 'Nine', 'Ace', 'King', 'Queen', 'Ten'] as Capitalize<CardType>[]) {
 		if (cards.length === 4 && cardsByType[type].length === 4) {
 			switch (type) {
 				case 'Jack': tryUpdateBest({ type: Callings.Jack4 }); break;
@@ -168,7 +173,7 @@ export function compareCallStrength(call1: CallingsCall, call2: CallingsCall): n
 		const highestCard1 = getHighestCardInSequence(call1.cards);
 		const highestCard2 = getHighestCardInSequence(call2.cards);
 
-		return CardPoints[highestCard1.type] - CardPoints[highestCard2.type];
+		return CardPoints[firstLetterUpperCase(highestCard1.type)] - CardPoints[firstLetterUpperCase(highestCard2.type)];
 	}
 
 	return 0;
@@ -176,7 +181,7 @@ export function compareCallStrength(call1: CallingsCall, call2: CallingsCall): n
 
 export function getHighestCardInSequence(cards: Card[]): Card {
 	return cards.reduce((highest, current) => {
-		return CardPoints[current.type] > CardPoints[highest.type] ? current : highest;
+		return CardPoints[firstLetterUpperCase(current.type)] > CardPoints[firstLetterUpperCase(highest.type)] ? current : highest;
 	});
 }
 
@@ -234,13 +239,13 @@ export function findLegalCard(currentTrick: PlayedCard[], adut: CardColor, playe
 }
 
 export function canBeatCard(card: Card, targetCard: Card, adut: CardColor): boolean {
-	if (card.color === adut && targetCard.color === adut) return CardPointsAdut[card.type] > CardPointsAdut[targetCard.type];
+	if (card.color === adut && targetCard.color === adut) return CardPointsAdut[firstLetterUpperCase(card.type)] > CardPointsAdut[firstLetterUpperCase(targetCard.type)];
 
 	if (card.color === adut && targetCard.color !== adut) return true;
 	if (card.color !== adut && targetCard.color === adut) return false;
 
 	if (card.color === targetCard.color) {
-		return CardPoints[card.type] > CardPoints[targetCard.type];
+		return CardPoints[firstLetterUpperCase(card.type)] > CardPoints[firstLetterUpperCase(targetCard.type)];
 	}
 
 	return false;
@@ -250,14 +255,14 @@ export function getHighestTrumpInTrick(trick: PlayedCard[], adut: CardColor): Ca
 	const trumpCards = trick.filter((c) => c.color === adut);
 	if (trumpCards.length === 0) return null;
 
-	return trumpCards.reduce((highest, current) => CardPointsAdut[current.type] > CardPointsAdut[highest.type] ? current : highest);
+	return trumpCards.reduce((highest, current) => CardPointsAdut[firstLetterUpperCase(current.type)] > CardPointsAdut[firstLetterUpperCase(highest.type)] ? current : highest);
 }
 
 export function getHighestNonTrumpInTrick(trick: PlayedCard[], adut: CardColor): Card | null {
 	const nonTrumpCards = trick.filter((c) => c.color !== adut);
 	if (nonTrumpCards.length === 0) return null;
 
-	return nonTrumpCards.reduce((highest, current) => CardPoints[current.type] > CardPoints[highest.type] ? current : highest);
+	return nonTrumpCards.reduce((highest, current) => CardPoints[firstLetterUpperCase(current.type)] > CardPoints[firstLetterUpperCase(highest.type)] ? current : highest);
 }
 
 export function cardColorLocalized(color: CardColor): CardColorLocal {
@@ -271,14 +276,14 @@ export function cardColorLocalized(color: CardColor): CardColorLocal {
 
 export function cardTypeLocalized(type: CardType): CardTypeLocal {
 	switch (type) {
-		case 'Ace': return 'As';
-		case 'King': return 'Kralj';
-		case 'Queen': return 'Baba';
-		case 'Jack': return 'Decko';
-		case 'Ten': return 'Deset';
-		case 'Nine': return 'Devet';
-		case 'Eight': return 'Osam';
-		case 'Seven': return 'Sedam';
+		case 'ace': return 'as';
+		case 'king': return 'kralj';
+		case 'queen': return 'baba';
+		case 'jack': return 'decko';
+		case 'ten': return 'deset';
+		case 'nine': return 'devet';
+		case 'eight': return 'osam';
+		case 'seven': return 'sedam';
 	}
 }
 
@@ -293,13 +298,13 @@ export function normalizeLocalColor(color: CardColorLocal): CardColor {
 
 export function normalizeLocalType(type: CardTypeLocal): CardType {
 	switch (type) {
-		case 'As': return 'Ace';
-		case 'Kralj': return 'King';
-		case 'Baba': return 'Queen';
-		case 'Decko': return 'Jack';
-		case 'Deset': return 'Ten';
-		case 'Devet': return 'Nine';
-		case 'Osam': return 'Eight';
-		case 'Sedam': return 'Seven';
+		case 'as': return 'ace';
+		case 'kralj': return 'king';
+		case 'baba': return 'queen';
+		case 'decko': return 'jack';
+		case 'deset': return 'ten';
+		case 'devet': return 'nine';
+		case 'osam': return 'eight';
+		case 'sedam': return 'seven';
 	}
 }

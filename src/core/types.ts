@@ -1,19 +1,19 @@
 export const cardColors = ['hearts', 'diamonds', 'clubs', 'spades'] as const;
 export type CardColor = typeof cardColors[number];
 
-export const cardTypes = ['Ace', 'King', 'Queen', 'Jack', 'Ten', 'Nine', 'Eight', 'Seven'] as const;
+export const cardTypes = ['ace', 'king', 'queen', 'jack', 'ten', 'nine', 'eight', 'seven'] as const;
 export type CardType = typeof cardTypes[number];
 
-export const cardTypeOrder: CardType[] = ['Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King', 'Ace'];
+export const cardTypeOrder: CardType[] = ['seven', 'eight', 'nine', 'ten', 'jack', 'queen', 'king', 'ace'];
 
 // Localized versions for Croatian Belot.
 export const cardColorsLocal = ['herc', 'karo', 'tref', 'pik'] as const;
 export type CardColorLocal = typeof cardColorsLocal[number];
 
-export const cardTypesLocal = ['As', 'Kralj', 'Baba', 'Decko', 'Deset', 'Devet', 'Osam', 'Sedam'] as const;
+export const cardTypesLocal = ['as', 'kralj', 'baba', 'decko', 'deset', 'devet', 'osam', 'sedam'] as const;
 export type CardTypeLocal = typeof cardTypesLocal[number];
 
-export const cardTypeOrderLocal: CardTypeLocal[] = ['Sedam', 'Osam', 'Devet', 'Deset', 'Decko', 'Baba', 'Kralj', 'As'];
+export const cardTypeOrderLocal: CardTypeLocal[] = ['sedam', 'osam', 'devet', 'deset', 'decko', 'baba', 'kralj', 'as'];
 
 export enum CardPoints {
 	Ace = 11,
