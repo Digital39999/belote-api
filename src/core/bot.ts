@@ -1,10 +1,10 @@
 import { Card, CardColor, cardColors, Player, PlayedCard, Callings, AllPossibleCalls } from './types';
-import { validateCalling, findLegalCard, getCardValue, mulberry32, canBeatCard } from './utils';
+import { validateCalling, getCardValue, mulberry32, canBeatCard, canPlayCard } from './utils';
 
 export class BotAI {
 	static decideBid(player: Player): CardColor | 'pass' {
-		const colorCounts: Record<CardColor, number> = { herc: 0, karo: 0, tref: 0, pik: 0 };
-		const colorValues: Record<CardColor, number> = { herc: 0, karo: 0, tref: 0, pik: 0 };
+		const colorCounts: Record<CardColor, number> = { hearts: 0, diamonds: 0, clubs: 0, spades: 0 };
+		const colorValues: Record<CardColor, number> = { hearts: 0, diamonds: 0, clubs: 0, spades: 0 };
 
 		for (const card of player.cards) {
 			colorCounts[card.color]++;
@@ -47,13 +47,15 @@ export class BotAI {
 	}
 
 	static decideCardToPlay(player: Player, currentTrick: PlayedCard[], adut: CardColor): Card {
-		const legalCards = player.cards.filter((card) => findLegalCard(currentTrick, adut, [card]) !== null);
+		const allPlayerCards = [...player.cards, ...player.talon];
+
+		const legalCards = allPlayerCards.filter((card) => canPlayCard(card, currentTrick, adut, allPlayerCards));
 		if (legalCards.length === 0) throw new Error('No legal cards to play?');
 		else if (legalCards.length === 1) return legalCards[0]!;
 
-		// Leading - if no cards played, choose best card
+		// Leading - if no cards played, choose best card.
 		if (currentTrick.length === 0) return this.chooseBestLeadingCard(legalCards, adut);
-		// Following - try to win or play strategically
+		// Following - try to win or play strategically.
 		else return this.chooseBestFollowingCard(legalCards, currentTrick, adut);
 	}
 
@@ -76,7 +78,7 @@ export class BotAI {
 	}
 
 	static chooseBestLeadingCard(cards: Card[], adut: CardColor): Card {
-		// Prefer trump cards, then high-value cards
+		// Prefer trump cards, then high-value cards.
 		const trumpCards = cards.filter((c) => c.color === adut);
 		if (trumpCards.length > 0) {
 			return trumpCards.reduce((best, current) =>
@@ -84,7 +86,7 @@ export class BotAI {
 			);
 		}
 
-		// Otherwise play highest value card
+		// Otherwise play highest value card.
 		return cards.reduce((best, current) => getCardValue(current, adut) > getCardValue(best, adut) ? current : best);
 	}
 

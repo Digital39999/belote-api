@@ -1,4 +1,4 @@
-import { CallingResult, Callings, CallingsCall, Card, CardColor, cardColors, CardPoints, CardPointsAdut, CardType, cardTypeOrder, cardTypes, PlayedCard } from './types';
+import { CallingResult, Callings, CallingsCall, Card, CardColor, CardColorLocal, cardColors, CardPoints, CardPointsAdut, CardType, CardTypeLocal, cardTypeOrder, cardTypes, PlayedCard } from './types';
 
 export function mulberry32(seed: number): () => number {
 	return function () {
@@ -62,9 +62,9 @@ export function isConsecutiveSequence(cards: Card[]): boolean {
 export function validateCalling(cards: Card[], adut: CardColor): CallingResult | null {
 	let bestCall: CallingResult | null = null;
 
-	const cardsByColor: Record<CardColor, Card[]> = { herc: [], karo: [], tref: [], pik: [] };
+	const cardsByColor: Record<CardColor, Card[]> = { hearts: [], diamonds: [], clubs: [], spades: [] };
 	const cardsByType: Record<CardType, Card[]> = {
-		As: [], Kralj: [], Baba: [], Decko: [], Deset: [], Devet: [], Osam: [], Sedam: [],
+		Ace: [], King: [], Queen: [], Jack: [], Ten: [], Nine: [], Eight: [], Seven: [],
 	};
 
 	for (const card of cards) {
@@ -76,45 +76,45 @@ export function validateCalling(cards: Card[], adut: CardColor): CallingResult |
 		if (!bestCall || call.type > bestCall.type) bestCall = call;
 	};
 
-	// 1. Check for Belot (8 cards of same color)
+	// 1. Check for Belot (8 cards of same color).
 	for (const color of cardColors) {
 		if (cards.length === 8 && cardsByColor[color].length === 8) {
 			return { type: Callings.Belot };
 		}
 	}
 
-	// 2. Check Bela: exactly 2 cards - Kralj and Baba of adut
-	if (cards.length === 2 && cardsByColor[adut].some((c) => c.type === 'Kralj') && cardsByColor[adut].some((c) => c.type === 'Baba')) {
-		if (cards.every((c) => c.color === adut && (c.type === 'Kralj' || c.type === 'Baba'))) {
+	// 2. Check Bela: exactly 2 cards - King and Queen of adut.
+	if (cards.length === 2 && cardsByColor[adut].some((c) => c.type === 'King') && cardsByColor[adut].some((c) => c.type === 'Queen')) {
+		if (cards.every((c) => c.color === adut && (c.type === 'King' || c.type === 'Queen'))) {
 			tryUpdateBest({ type: Callings.Bela });
 		}
 	}
 
-	// 2. Check four of a kind
-	for (const type of ['Decko', 'Devet', 'As', 'Kralj', 'Baba', 'Deset'] as CardType[]) {
+	// 2. Check four of a kind.
+	for (const type of ['Jack', 'Nine', 'Ace', 'King', 'Queen', 'Ten'] as CardType[]) {
 		if (cards.length === 4 && cardsByType[type].length === 4) {
 			switch (type) {
-				case 'Decko': tryUpdateBest({ type: Callings.Decko4 }); break;
-				case 'Devet': tryUpdateBest({ type: Callings.Devet4 }); break;
-				case 'As': tryUpdateBest({ type: Callings.As4 }); break;
-				case 'Kralj': tryUpdateBest({ type: Callings.Kralj4 }); break;
-				case 'Baba': tryUpdateBest({ type: Callings.Baba4 }); break;
-				case 'Deset': tryUpdateBest({ type: Callings.Deset4 }); break;
+				case 'Jack': tryUpdateBest({ type: Callings.Jack4 }); break;
+				case 'Nine': tryUpdateBest({ type: Callings.Nine4 }); break;
+				case 'Ace': tryUpdateBest({ type: Callings.Ace4 }); break;
+				case 'King': tryUpdateBest({ type: Callings.King4 }); break;
+				case 'Queen': tryUpdateBest({ type: Callings.Queen4 }); break;
+				case 'Ten': tryUpdateBest({ type: Callings.Ten4 }); break;
 			}
 		}
 	}
 
-	// 3. Check for sequences
+	// 3. Check for sequences.
 	if (cards.length >= 3) {
 		const firstColor = cards[0]!.color;
 
 		if (cards.every((c) => c.color === firstColor)) {
 			const sortedCards = cards.slice().sort((a, b) => cardTypeOrder.indexOf(a.type) - cardTypeOrder.indexOf(b.type));
 			if (isConsecutiveSequence(sortedCards)) {
-				const callKey = `Niz${cards.length}` as keyof typeof Callings;
+				const callKey = `Sequence${cards.length}` as keyof typeof Callings;
 
 				if (Callings[callKey]) tryUpdateBest({ type: Callings[callKey] });
-				else if (cards.length >= 5) tryUpdateBest({ type: Callings.Niz5 });
+				else if (cards.length >= 5) tryUpdateBest({ type: Callings.Sequence5 });
 			}
 		}
 	}
@@ -136,18 +136,18 @@ export function getHighestCall(calls: CallingsCall[]): CallingsCall | null {
 export function compareCallStrength(call1: CallingsCall, call2: CallingsCall): number {
 	const getCallStrength = (call: Callings): number => {
 		switch (call) {
-			case Callings.Niz3: return 1;
-			case Callings.Niz4: return 2;
-			case Callings.Niz5: return 3;
-			case Callings.Niz6: return 4;
-			case Callings.Niz7: return 5;
+			case Callings.Sequence3: return 1;
+			case Callings.Sequence4: return 2;
+			case Callings.Sequence5: return 3;
+			case Callings.Sequence6: return 4;
+			case Callings.Sequence7: return 5;
 			case Callings.Bela: return 6;
-			case Callings.As4: return 7;
-			case Callings.Kralj4: return 8;
-			case Callings.Baba4: return 9;
-			case Callings.Deset4: return 10;
-			case Callings.Devet4: return 11;
-			case Callings.Decko4: return 12;
+			case Callings.Ace4: return 7;
+			case Callings.King4: return 8;
+			case Callings.Queen4: return 9;
+			case Callings.Jack4: return 10;
+			case Callings.Nine4: return 11;
+			case Callings.Ten4: return 12;
 			case Callings.Belot: return 13;
 			default: return 0;
 		}
@@ -160,7 +160,7 @@ export function compareCallStrength(call1: CallingsCall, call2: CallingsCall): n
 		return strength1 - strength2;
 	}
 
-	if (call1.call >= Callings.Niz3 && call1.call <= Callings.Niz7) {
+	if (call1.call >= Callings.Sequence3 && call1.call <= Callings.Sequence7) {
 		const highestCard1 = getHighestCardInSequence(call1.cards);
 		const highestCard2 = getHighestCardInSequence(call2.cards);
 
@@ -182,11 +182,11 @@ export function canPlayCard(card: Card, currentTrick: PlayedCard[], adut: CardCo
 	const leadingSuit = currentTrick[0]!.color;
 	const hasLeadingSuit = playerCards.some((c) => c.color === leadingSuit);
 
-	// If player has leading suit, must follow suit
+	// If player has leading suit, must follow suit.
 	if (hasLeadingSuit) {
 		if (card.color !== leadingSuit) return false;
 
-		// If leading suit is trump, must play higher trump if possible
+		// If leading suit is trump, must play higher trump if possible.
 		if (leadingSuit === adut) {
 			const mustBeatCard = getHighestTrumpInTrick(currentTrick, adut);
 			if (mustBeatCard && canBeatCard(card, mustBeatCard, adut)) {
@@ -194,7 +194,7 @@ export function canPlayCard(card: Card, currentTrick: PlayedCard[], adut: CardCo
 				return !hasHigherTrump || canBeatCard(card, mustBeatCard, adut);
 			}
 		} else {
-			// Non-trump suit - must play higher if possible (unless trump was played)
+			// Non-trump suit - must play higher if possible (unless trump was played).
 			const trumpPlayed = currentTrick.some((c) => c.color === adut);
 			if (!trumpPlayed) {
 				const highestCard = getHighestNonTrumpInTrick(currentTrick, adut);
@@ -208,12 +208,12 @@ export function canPlayCard(card: Card, currentTrick: PlayedCard[], adut: CardCo
 		return true;
 	}
 
-	// No leading suit - must play trump if available
+	// No leading suit - must play trump if available.
 	const hasTrump = playerCards.some((c) => c.color === adut);
 	if (hasTrump) {
 		if (card.color !== adut) return false;
 
-		// Must beat highest trump if possible
+		// Must beat highest trump if possible.
 		const highestTrump = getHighestTrumpInTrick(currentTrick, adut);
 		if (highestTrump) {
 			const hasHigherTrump = playerCards.some((c) => c.color === adut && canBeatCard(c, highestTrump, adut));
@@ -221,7 +221,7 @@ export function canPlayCard(card: Card, currentTrick: PlayedCard[], adut: CardCo
 		}
 	}
 
-	// No leading suit, no trump - can play any card
+	// No leading suit, no trump - can play any card.
 	return true;
 }
 
@@ -254,4 +254,48 @@ export function getHighestNonTrumpInTrick(trick: PlayedCard[], adut: CardColor):
 	if (nonTrumpCards.length === 0) return null;
 
 	return nonTrumpCards.reduce((highest, current) => CardPoints[current.type] > CardPoints[highest.type] ? current : highest);
+}
+
+export function cardColorLocalized(color: CardColor): CardColorLocal {
+	switch (color) {
+		case 'hearts': return 'herc';
+		case 'diamonds': return 'karo';
+		case 'clubs': return 'tref';
+		case 'spades': return 'pik';
+	}
+}
+
+export function cardTypeLocalized(type: CardType): CardTypeLocal {
+	switch (type) {
+		case 'Ace': return 'As';
+		case 'King': return 'Kralj';
+		case 'Queen': return 'Baba';
+		case 'Jack': return 'Decko';
+		case 'Ten': return 'Deset';
+		case 'Nine': return 'Devet';
+		case 'Eight': return 'Osam';
+		case 'Seven': return 'Sedam';
+	}
+}
+
+export function normalizeLocalColor(color: CardColorLocal): CardColor {
+	switch (color) {
+		case 'herc': return 'hearts';
+		case 'karo': return 'diamonds';
+		case 'tref': return 'clubs';
+		case 'pik': return 'spades';
+	}
+}
+
+export function normalizeLocalType(type: CardTypeLocal): CardType {
+	switch (type) {
+		case 'As': return 'Ace';
+		case 'Kralj': return 'King';
+		case 'Baba': return 'Queen';
+		case 'Decko': return 'Jack';
+		case 'Deset': return 'Ten';
+		case 'Devet': return 'Nine';
+		case 'Osam': return 'Eight';
+		case 'Sedam': return 'Seven';
+	}
 }

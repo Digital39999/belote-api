@@ -1,31 +1,40 @@
-export const cardColors = ['herc', 'karo', 'tref', 'pik'] as const;
+export const cardColors = ['hearts', 'diamonds', 'clubs', 'spades'] as const;
 export type CardColor = typeof cardColors[number];
 
-export const cardTypes = ['As', 'Kralj', 'Baba', 'Decko', 'Deset', 'Devet', 'Osam', 'Sedam'] as const;
+export const cardTypes = ['Ace', 'King', 'Queen', 'Jack', 'Ten', 'Nine', 'Eight', 'Seven'] as const;
 export type CardType = typeof cardTypes[number];
 
-export const cardTypeOrder: CardType[] = ['Sedam', 'Osam', 'Devet', 'Deset', 'Decko', 'Baba', 'Kralj', 'As'];
+export const cardTypeOrder: CardType[] = ['Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King', 'Ace'];
+
+// Localized versions for Croatian Belot.
+export const cardColorsLocal = ['herc', 'karo', 'tref', 'pik'] as const;
+export type CardColorLocal = typeof cardColorsLocal[number];
+
+export const cardTypesLocal = ['As', 'Kralj', 'Baba', 'Decko', 'Deset', 'Devet', 'Osam', 'Sedam'] as const;
+export type CardTypeLocal = typeof cardTypesLocal[number];
+
+export const cardTypeOrderLocal: CardTypeLocal[] = ['Sedam', 'Osam', 'Devet', 'Deset', 'Decko', 'Baba', 'Kralj', 'As'];
 
 export enum CardPoints {
-	As = 11,
-	Kralj = 4,
-	Baba = 3,
-	Decko = 2,
-	Deset = 10,
-	Devet = 0,
-	Osam = 0,
-	Sedam = 0,
+	Ace = 11,
+	King = 4,
+	Queen = 3,
+	Jack = 2,
+	Ten = 10,
+	Nine = 0,
+	Eight = 0,
+	Seven = 0,
 }
 
 export enum CardPointsAdut {
-	As = 11,
-	Kralj = 4,
-	Baba = 3,
-	Decko = 20,
-	Deset = 10,
-	Devet = 14,
-	Osam = 0,
-	Sedam = 0,
+	Ace = 11,
+	King = 4,
+	Queen = 3,
+	Jack = 20,
+	Ten = 10,
+	Nine = 14,
+	Eight = 0,
+	Seven = 0,
 }
 
 export type Card = {
@@ -38,21 +47,23 @@ export type PlayedCard = Card & {
 }
 
 export enum Callings {
+	None = 0, // No call made.
+
 	Belot = -1, // 8 cards of same color, instant win.
-	Bela = 20, // Kralj and Baba of adut.
+	Bela = 20, // King and Queen of adut.
 
-	Decko4 = 200,
-	Devet4 = 150,
-	As4 = 100,
-	Kralj4 = 100,
-	Baba4 = 100,
-	Deset4 = 100,
+	Jack4 = 200,
+	Nine4 = 150,
+	Ace4 = 100,
+	King4 = 100,
+	Queen4 = 100,
+	Ten4 = 100,
 
-	Niz3 = 20,
-	Niz4 = 50,
-	Niz5 = 100,
-	Niz6 = 100,
-	Niz7 = 100,
+	Sequence3 = 20,
+	Sequence4 = 50,
+	Sequence5 = 100,
+	Sequence6 = 100,
+	Sequence7 = 100,
 }
 
 export enum GamePhase {
@@ -69,7 +80,7 @@ export type MoveTime = 10 | 20 | 30 | 40 | 50 | 60;
 
 export type GameOptions = {
 	endValue: EndValue;
-	moveTime: MoveTime;
+	moveTimeSec: MoveTime;
 	botDelayMs: number;
 }
 
@@ -141,7 +152,7 @@ export type GameState = {
 	currentTrick: Trick | null;
 
 	currentPlayerIndex: number;
-	currentPlayerTimeLeft: number;
+	currentPlayerTimeLeft: number; // Time left for the current player to make a move (in seconds).
 
 	isGameOver: boolean;
 	winnerTeam?: Team;
@@ -149,6 +160,9 @@ export type GameState = {
 
 // Declarations.
 export type BeloteEvents = {
+	// General events.
+	error: (error: Error) => void;
+
 	// Player management events.
 	playerJoined: (player: Player) => void;
 	playerLeft: (playerId: string) => void;
@@ -161,13 +175,13 @@ export type BeloteEvents = {
 
 	// Game lifecycle events.
 	gameStarted: (gameState: GameState) => void;
-	gameEnded: (winnerTeam: Team) => void;
+	gameEnded: (winnerTeam: Team, finalScores: Record<'team1' | 'team2', number>, isByBelot?: boolean) => void;
 
 	roundStarted: (roundNumber: number, dealer: Player) => void;
 	roundCompleted: (roundNumber: number, scores: { team1: number; team2: number }, winningTeam: Team, failedTeam?: Team) => void;
 
 	// Timer events.
-	timerUpdate: (timeLeft: number) => void;
+	timerUpdate: (timeLeft: number, timerFor: Player | null) => void;
 
 	// Dealing phase events.
 	initialCardsDealt: (playerCards: { playerId: string; cardCount: number }[]) => void;
