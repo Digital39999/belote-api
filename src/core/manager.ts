@@ -319,33 +319,54 @@ export class Belote extends EventEmitter {
 		this.gameState.gamePhase = GamePhase.Calling;
 		this.emit('callingPhaseStarted');
 
-		for (const player of this.gameState.players) {
-			if (player.isBot) {
-				this.safeBotAction(() => {
-					const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === player.id);
-					if (!hasAlreadyCalled && this.gameState.adut) {
-						const allPlayerCards = [...player.cards, ...player.talon];
-						const botDecision = BotAI.decideCalling(
-							{ ...player, cards: allPlayerCards },
-							this.gameState.adut,
-						);
+		const botPlayers = this.gameState.players.filter((p) => p.isBot);
 
-						this.makeCall(player.id, botDecision);
+		const processBotCall = (index: number) => {
+			if (index >= botPlayers.length) {
+				const remainingPlayers = this.gameState.players.filter((p) => !p.isBot && !this.gameState.calls.some((call) => call.playerId === p.id));
+
+				if (remainingPlayers.length > 0) {
+					this.startTimer(this.options.moveTimeSec, () => {
+						for (const player of remainingPlayers) {
+							if (!this.gameState.calls.some((call) => call.playerId === player.id)) {
+								this.makeCall(player.id, []);
+							}
+						}
+					});
+				}
+
+				return;
+			}
+
+			const player = botPlayers[index]!;
+			if (this.gameState.adut) {
+				this.safeBotAction(() => {
+					const allPlayerCards = [...player.cards, ...player.talon];
+					const botDecision = BotAI.decideCalling(
+						{ ...player, cards: allPlayerCards },
+						this.gameState.adut!,
+					);
+
+					this.makeCall(player.id, botDecision);
+					setTimeout(() => processBotCall(index + 1), 1);
+				});
+			}
+		};
+
+		if (botPlayers.length > 0) processBotCall(0);
+		else {
+			const remainingPlayers = this.gameState.players.filter((p) => !p.isBot && !this.gameState.calls.some((call) => call.playerId === p.id));
+
+			if (remainingPlayers.length > 0) {
+				this.startTimer(this.options.moveTimeSec, () => {
+					for (const player of remainingPlayers) {
+						if (!this.gameState.calls.some((call) => call.playerId === player.id)) {
+							this.makeCall(player.id, []);
+						}
 					}
 				});
 			}
 		}
-
-		const makeCalls = () => {
-			for (const player of this.gameState.players) {
-				const hasAlreadyCalled = this.gameState.calls.some((call) => call.playerId === player.id);
-				if (!hasAlreadyCalled && !this.gameState.isGameOver) this.makeCall(player.id, []);
-			}
-		};
-
-		const allBots = this.gameState.players.filter((p) => p.isBot).length === this.gameState.players.length;
-		if (allBots) makeCalls();
-		else this.startTimer(this.options.moveTimeSec, makeCalls);
 	}
 
 	public makeCall(playerId: string, cards: Card[]): void {
@@ -397,12 +418,12 @@ export class Belote extends EventEmitter {
 	private resolveCalls(): void {
 		const team1Calls = this.gameState.calls.filter((call) => {
 			const player = this.gameState.players.find((p) => p.id === call.playerId);
-			return player?.teamId === 1;
+			return player?.teamId === 1 && call.call !== Callings.None;
 		});
 
 		const team2Calls = this.gameState.calls.filter((call) => {
 			const player = this.gameState.players.find((p) => p.id === call.playerId);
-			return player?.teamId === 2;
+			return player?.teamId === 2 && call.call !== Callings.None;
 		});
 
 		const team1HighestCall = getHighestCall(team1Calls);
