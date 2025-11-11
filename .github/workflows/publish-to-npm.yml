@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish to npm (OIDC)
 
 on:
   push:
@@ -14,20 +14,28 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org/'
-          
+          registry-url: 'https://registry.npmjs.org'
+          always-auth: true
+
+      - name: Ensure latest npm (OIDC support requires npm >=11.5.0)
+        run: npm install -g npm@latest
+
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
@@ -43,13 +51,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-        
+
       - name: Check if package needs publishing
         id: check_publish
         run: |
           current_version=$(node -p "require('./package.json').version")
           npm_package_name=$(node -p "require('./package.json').name")
-          
+
           # Check if package exists on npm
           if npm_info=$(npm view $npm_package_name version 2>/dev/null); then
             published_version=$npm_info
@@ -57,10 +65,10 @@ jobs:
             published_version="0.0.0"
             echo "Package not found on npm registry, will publish for first time"
           fi
-          
+
           echo "Current version: $current_version"
           echo "Published version: $published_version"
-          
+
           if [ "$current_version" == "$published_version" ]; then
             echo "No new version. Skipping publish."
             echo "should_publish=false" >> $GITHUB_OUTPUT
@@ -68,17 +76,15 @@ jobs:
             echo "New version available. Proceeding to publish."
             echo "should_publish=true" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Run linting
         if: steps.check_publish.outputs.should_publish == 'true'
         run: pnpm run lint
-        
+
       - name: Build the project
         if: steps.check_publish.outputs.should_publish == 'true'
         run: pnpm run build
 
-      - name: Publish to npm
+      - name: Publish to npm using OIDC
         if: steps.check_publish.outputs.should_publish == 'true'
-        run: pnpm publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --access public --no-git-checks --provenance
